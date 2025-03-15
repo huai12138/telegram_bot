@@ -44,21 +44,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text="你不是管理员，无权使用我。"
         )
     
-    # 等待指定时间后删除消息
-    await asyncio.sleep(DELETE_DELAY)
-    
-    # 删除原始命令消息和响应消息
-    try:
-        await context.bot.delete_message(
-            chat_id=update.effective_chat.id,
-            message_id=original_message_id
-        )
-        await context.bot.delete_message(
-            chat_id=update.effective_chat.id,
-            message_id=response_message.message_id
-        )
-    except TelegramError as e:
-        logging.error(f"删除消息失败 - {e}")
+    # 创建后台任务来处理延迟删除，而不是直接等待
+    chat_id = update.effective_chat.id
+    asyncio.create_task(delayed_delete_messages(
+        chat_id, 
+        [original_message_id, response_message.message_id], 
+        context.bot, 
+        DELETE_DELAY
+    ))
+
+# 添加一个通用的延迟删除消息函数
+async def delayed_delete_messages(chat_id: int, message_ids: list, bot, delay: int):
+    """在指定延迟后删除消息的通用函数"""
+    await asyncio.sleep(delay)
+    for msg_id in message_ids:
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=msg_id)
+        except TelegramError as e:
+            logging.error(f"删除消息失败 - 消息ID:{msg_id} - {e}")
 
 async def handle_new_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理新成员入群事件"""
@@ -192,21 +195,13 @@ async def set_chinese(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
         
-        # 等待指定时间
-        await asyncio.sleep(DELETE_DELAY)
-        
-        # 删除原始消息和回复消息
-        try:
-            await context.bot.delete_message(
-                chat_id=update.effective_chat.id,
-                message_id=original_message_id
-            )
-            await context.bot.delete_message(
-                chat_id=update.effective_chat.id,
-                message_id=reply_message.message_id
-            )
-        except TelegramError as e:
-            logging.error(f"Failed to delete messages - {e}")
+        # 创建后台任务来处理延迟删除
+        asyncio.create_task(delayed_delete_messages(
+            update.effective_chat.id,
+            [original_message_id, reply_message.message_id],
+            context.bot,
+            DELETE_DELAY
+        ))
             
     except TelegramError as e:
         logging.error(f"Failed to send language setting message - {e}")
@@ -214,6 +209,7 @@ async def set_chinese(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def delete_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理删除消息的命令 - 仅限管理员使用"""
     user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
     
     # 检查发送命令的用户是否是管理员
     if not is_admin(user_id):
@@ -228,10 +224,13 @@ async def delete_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.reply_to_message:
         try:
             error_msg = await update.message.reply_text("请回复要删除的消息。")
-            # 指定时间后删除提示消息和命令消息
-            await asyncio.sleep(DELETE_DELAY)
-            await error_msg.delete()
-            await update.message.delete()
+            # 创建后台任务来处理延迟删除
+            asyncio.create_task(delayed_delete_messages(
+                chat_id,
+                [update.message.message_id, error_msg.message_id],
+                context.bot,
+                DELETE_DELAY
+            ))
         except TelegramError as e:
             logging.error(f"删除消息失败 - {e}")
         return
