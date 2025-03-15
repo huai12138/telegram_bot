@@ -33,7 +33,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_admin(user_id):
         await context.bot.send_message(
             chat_id=update.effective_chat.id, 
-            text="欢迎 huai12138 我是执盾人，您的坚实护盾。"
+            text="欢迎 huai12138 我是防御之盾，您的坚实护盾。"
         )
     else:
         await context.bot.send_message(
@@ -75,7 +75,7 @@ async def handle_new_members(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         welcome_message = (
             f"欢迎新成员 {new_member.full_name} 加入！\n"
-            f"请在30秒内发送 'hi' 完成验证，否则将被移出群组。\n"
+            f"请在30秒内发送 'hi' 完成验证，否则将被永久封禁。\n"
             f"用户ID: {new_member.id}\n"
             f"用户名: @{new_member.username if new_member.username else '无'}"
         )
