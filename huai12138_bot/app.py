@@ -168,8 +168,48 @@ def main():
     application.add_handler(CommandHandler("unban", unban))
     application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, forward_to_admin))
 
-    # 启动机器人
-    application.run_polling()
+    # 获取运行模式
+    MODE = os.getenv('MODE', 'poll')  # 默认为polling模式
+    
+    if MODE == 'webhook':
+        # 从环境变量获取webhook配置
+        WEBHOOK_HOST = os.getenv('WEBHOOK_HOST')
+        WEBHOOK_PORT = int(os.getenv('WEBHOOK_PORT', 8443))
+        WEBHOOK_LISTEN = os.getenv('WEBHOOK_LISTEN', '0.0.0.0')
+        WEBHOOK_SECRET_TOKEN = os.getenv('WEBHOOK_SECRET_TOKEN')
+        WEBHOOK_PATH = os.getenv('WEBHOOK_PATH', '')
+        
+        # 确保WEBHOOK_PATH正确格式化
+        if WEBHOOK_PATH and not WEBHOOK_PATH.startswith('/'):
+            WEBHOOK_PATH = f'/{WEBHOOK_PATH}'
+            
+        # 确保WEBHOOK_HOST不以/结尾
+        if WEBHOOK_HOST and WEBHOOK_HOST.endswith('/'):
+            WEBHOOK_HOST = WEBHOOK_HOST[:-1]
+            
+        # 构建完整的webhook URL
+        webhook_url = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+        
+        # 输出配置信息
+        logging.info(f"使用webhook模式启动机器人")
+        logging.info(f"监听地址: {WEBHOOK_LISTEN}:{WEBHOOK_PORT}")
+        logging.info(f"Webhook URL: {webhook_url}")
+        
+        # 如果定义了路径，则删除开头的斜杠用于url_path参数
+        url_path = WEBHOOK_PATH.lstrip('/') if WEBHOOK_PATH else TOKEN
+        
+        # 启动webhook模式
+        application.run_webhook(
+            listen=WEBHOOK_LISTEN,
+            port=WEBHOOK_PORT,
+            url_path=url_path,
+            webhook_url=webhook_url,
+            secret_token=WEBHOOK_SECRET_TOKEN
+        )
+    else:
+        # 使用polling模式
+        logging.info("使用polling模式启动机器人")
+        application.run_polling()
 
 if __name__ == '__main__':
     main()
