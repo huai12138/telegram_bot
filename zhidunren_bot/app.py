@@ -30,16 +30,35 @@ pending_users = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    # 记录原始消息ID
+    original_message_id = update.message.message_id
+    
     if is_admin(user_id):
-        await context.bot.send_message(
+        response_message = await context.bot.send_message(
             chat_id=update.effective_chat.id, 
-            text="欢迎 huai12138 我是防御之盾，您的坚实护盾。"
+            text="Hi Master 我是防御之盾，您的坚实护盾。"
         )
     else:
-        await context.bot.send_message(
+        response_message = await context.bot.send_message(
             chat_id=update.effective_chat.id, 
             text="你不是管理员，无权使用我。"
         )
+    
+    # 等待指定时间后删除消息
+    await asyncio.sleep(DELETE_DELAY)
+    
+    # 删除原始命令消息和响应消息
+    try:
+        await context.bot.delete_message(
+            chat_id=update.effective_chat.id,
+            message_id=original_message_id
+        )
+        await context.bot.delete_message(
+            chat_id=update.effective_chat.id,
+            message_id=response_message.message_id
+        )
+    except TelegramError as e:
+        logging.error(f"删除消息失败 - {e}")
 
 async def handle_new_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理新成员入群事件"""
