@@ -16,6 +16,19 @@ DELETE_DELAY = int(os.getenv('DELETE_DELAY', 3))
 BAN_MSG_DELAY = int(os.getenv('BAN_MSG_DELAY', 3))
 VERIFY_TIMEOUT = int(os.getenv('VERIFY_TIMEOUT', 30))
 
+# Webhook配置
+WEBHOOK_HOST = os.getenv('WEBHOOK_HOST')  # 例如 'https://example.com'
+WEBHOOK_PATH = os.getenv('WEBHOOK_PATH', f'/{BOT_TOKEN}')  # 例如 '/telegram-bot'
+WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+WEBHOOK_PORT = int(os.getenv('WEBHOOK_PORT', 8443))
+WEBHOOK_LISTEN = os.getenv('WEBHOOK_LISTEN', '0.0.0.0')  # 监听地址
+SSL_CERT = os.getenv('SSL_CERT')  # SSL证书路径，可选
+SSL_KEY = os.getenv('SSL_KEY')    # SSL密钥路径，可选
+WEBHOOK_SECRET_TOKEN = os.getenv('WEBHOOK_SECRET_TOKEN')  # 可选的安全令牌
+
+# 反向代理设置
+BEHIND_PROXY = os.getenv('BEHIND_PROXY', 'False').lower() == 'true'
+
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -271,6 +284,34 @@ if __name__ == '__main__':
     # 添加错误处理器
     application.add_error_handler(lambda update, context: logging.error(f"Update {update} caused error {context.error}"))
     
-    # 启动机器人
-    logging.info("Bot started...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # 启动机器人，使用webhook
+    logging.info(f"Starting bot with webhook on {WEBHOOK_URL}")
+    
+    # 设置webhook
+    webhook_kwargs = {
+        'webhook_url': WEBHOOK_URL,  # 完整URL，用于通知Telegram服务器
+        'port': WEBHOOK_PORT,
+        'listen': WEBHOOK_LISTEN,
+        'url_path': WEBHOOK_PATH  # 使用url_path而不是path参数
+    }
+    
+    # 添加SSL证书配置（如果有的话且不在反向代理后面）
+    if SSL_CERT and SSL_KEY and not BEHIND_PROXY:
+        webhook_kwargs['cert'] = SSL_CERT
+        webhook_kwargs['key'] = SSL_KEY
+    
+    # 添加Secret Token（如果有的话）
+    if WEBHOOK_SECRET_TOKEN:
+        webhook_kwargs['secret_token'] = WEBHOOK_SECRET_TOKEN
+    
+    # 添加代理配置（如果在反向代理后面）
+    if BEHIND_PROXY:
+        webhook_kwargs['drop_pending_updates'] = True
+        # 在反向代理后面时，通常不需要指定证书
+        if 'cert' in webhook_kwargs:
+            del webhook_kwargs['cert']
+        if 'key' in webhook_kwargs:
+            del webhook_kwargs['key']
+    
+    # 使用webhook启动机器人
+    application.run_webhook(**webhook_kwargs)
