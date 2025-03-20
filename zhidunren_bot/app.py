@@ -256,6 +256,16 @@ async def delete_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"删除消息失败 - {e}")
 
 if __name__ == '__main__':
+    # 设置更详细的日志级别
+    logging.getLogger().setLevel(logging.DEBUG)
+    logging.info("启动机器人应用...")
+    logging.info(f"Webhook 配置: URL={WEBHOOK_URL}, PORT={WEBHOOK_PORT}, PATH={WEBHOOK_PATH}")
+    
+    # 检查配置有效性
+    if not WEBHOOK_HOST:
+        logging.error("缺少 WEBHOOK_HOST 配置，请检查 .env 文件")
+        exit(1)
+    
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     
     # 按照优先级顺序添加处理器
