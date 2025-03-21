@@ -1,4 +1,6 @@
 import logging
+import asyncio
+import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from block import BlockManager
@@ -25,9 +27,41 @@ if not TOKEN or not ADMIN_ID:
 # 替换 BANNED_USERS 集合
 block_manager = BlockManager()
 
+# 存储需要验证的用户和验证开始时间
+pending_verification = {}  # 格式: {user_id: start_time}
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /start 命令"""
-    await update.message.reply_text('你好！请直接发送消息，我会转发给管理员。')
+    user_id = str(update.effective_user.id)
+    
+    # 如果用户被封禁，则不需要验证
+    if block_manager.is_blocked(user_id):
+        await update.message.reply_text('您已被封禁，无法使用此机器人。')
+        return
+        
+    # 添加用户到验证列表
+    pending_verification[user_id] = time.time()
+    
+    # 发送验证提示
+    await update.message.reply_text('欢迎使用！请在30秒内发送 "hi" 完成验证，否则将被自动封禁。')
+    
+    # 启动验证检查任务
+    asyncio.create_task(check_verification(user_id, context))
+
+async def check_verification(user_id: str, context: ContextTypes.DEFAULT_TYPE):
+    """检查用户是否在30秒内完成验证"""
+    await asyncio.sleep(30)  # 等待30秒
+    
+    if user_id in pending_verification:
+        # 用户未能完成验证
+        del pending_verification[user_id]
+        block_manager.block_user(user_id)
+        
+        try:
+            await context.bot.send_message(user_id, "您未能在30秒内完成验证，已被自动封禁。")
+            await context.bot.send_message(ADMIN_ID, f"用户 {user_id} 未能完成验证，已被自动封禁。")
+        except Exception as e:
+            logging.error(f"发送封禁通知时出错: {e}")
 
 async def ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /ban 命令"""
@@ -96,11 +130,29 @@ async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     user = message.from_user
     chat_id = message.chat.id
+    user_id = str(chat_id)
     
     # 检查用户是否被封禁
-    if block_manager.is_blocked(str(chat_id)):
+    if block_manager.is_blocked(user_id):
         await message.reply_text("您已被封禁，无法使用此机器人。")
         return
+    
+    # 检查是否是待验证用户
+    if user_id in pending_verification:
+        # 检查是否发送了正确的验证消息
+        if message.text and message.text.lower() == "hi":
+            # 验证成功
+            del pending_verification[user_id]
+            await message.reply_text("验证成功！您现在可以正常使用机器人了。请直接发送消息，我会转发给管理员。")
+            
+            # 通知管理员
+            admin_msg = f"新用户完成验证:\n用户名: {user.first_name} (@{user.username if user.username else '无用户名'})\n用户ID: {user_id}"
+            await context.bot.send_message(ADMIN_ID, admin_msg)
+            return
+        else:
+            # 提醒用户发送正确的验证消息
+            await message.reply_text('请发送 "hi" 完成验证。')
+            return
     
     if str(chat_id) != ADMIN_ID:  # 如果不是管理员发送的消息
         try:
