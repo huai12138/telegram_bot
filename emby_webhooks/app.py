@@ -62,6 +62,7 @@ def format_notification_type(notification_type):
         "user.authenticationfailed": "用户认证失败",  # 添加此行
         "user.authenticationerror": "用户认证错误",   # 添加此行
         "user.password.reset": "用户密码重置",
+        "user.policyupdated": "用户策略更新",  # 添加此行
         
         # 会话相关
         "session.start": "会话开始",
