@@ -255,6 +255,123 @@ async def delete_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except TelegramError as e:
         logging.error(f"删除消息失败 - {e}")
 
+async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理封禁用户的命令 - 仅限管理员使用"""
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    
+    # 检查发送命令的用户是否是管理员
+    if not is_admin(user_id):
+        try:
+            # 直接删除非管理员的命令消息，不做提示
+            await update.message.delete()
+        except TelegramError as e:
+            logging.error(f"删除消息失败 - {e}")
+        return
+    
+    # 获取要封禁的用户ID
+    target_user_id = None
+    reason = "未指定原因"
+    
+    # 检查是否是回复消息
+    if update.message.reply_to_message:
+        target_user_id = update.message.reply_to_message.from_user.id
+        # 检查命令参数，如果有则作为封禁原因
+        if context.args:
+            reason = ' '.join(context.args)
+    else:
+        # 没有回复消息，则查看参数中是否有用户ID
+        if not context.args or len(context.args) < 1:
+            error_msg = await update.message.reply_text(
+                "使用方式: /ban <用户ID> [原因] 或回复要封禁的用户消息并使用 /ban [原因]"
+            )
+            # 延迟删除错误提示和命令消息
+            asyncio.create_task(delayed_delete_messages(
+                chat_id,
+                [update.message.message_id, error_msg.message_id],
+                context.bot,
+                DELETE_DELAY
+            ))
+            return
+        
+        # 尝试获取用户ID
+        try:
+            target_user_id = int(context.args[0])
+            # 如果有更多参数，作为封禁原因
+            if len(context.args) > 1:
+                reason = ' '.join(context.args[1:])
+        except ValueError:
+            error_msg = await update.message.reply_text("无效的用户ID格式，请提供数字ID。")
+            # 延迟删除错误提示和命令消息
+            asyncio.create_task(delayed_delete_messages(
+                chat_id,
+                [update.message.message_id, error_msg.message_id],
+                context.bot,
+                DELETE_DELAY
+            ))
+            return
+    
+    # 检查不要封禁自己或其他管理员
+    if target_user_id == user_id:
+        error_msg = await update.message.reply_text("不能封禁自己。")
+        # 延迟删除错误提示和命令消息
+        asyncio.create_task(delayed_delete_messages(
+            chat_id,
+            [update.message.message_id, error_msg.message_id],
+            context.bot,
+            DELETE_DELAY
+        ))
+        return
+    
+    if is_admin(target_user_id):
+        error_msg = await update.message.reply_text("不能封禁其他管理员。")
+        # 延迟删除错误提示和命令消息
+        asyncio.create_task(delayed_delete_messages(
+            chat_id,
+            [update.message.message_id, error_msg.message_id],
+            context.bot,
+            DELETE_DELAY
+        ))
+        return
+    
+    # 执行封禁操作
+    try:
+        await context.bot.ban_chat_member(
+            chat_id=chat_id, 
+            user_id=target_user_id,
+            revoke_messages=True  # 撤回该用户的所有消息
+        )
+        
+        # 发送封禁成功通知
+        ban_msg = await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"用户 ID:{target_user_id} 已被管理员 {update.effective_user.full_name} 封禁。\n原因：{reason}"
+        )
+        
+        # 删除命令消息
+        await update.message.delete()
+        
+        # 延迟删除封禁通知
+        asyncio.create_task(delayed_delete_messages(
+            chat_id,
+            [ban_msg.message_id],
+            context.bot,
+            BAN_MSG_DELAY
+        ))
+        
+        logging.info(f"Admin {user_id} banned user {target_user_id}. Reason: {reason}")
+        
+    except TelegramError as e:
+        error_msg = await update.message.reply_text(f"封禁失败: {str(e)}")
+        # 延迟删除错误提示和命令消息
+        asyncio.create_task(delayed_delete_messages(
+            chat_id,
+            [update.message.message_id, error_msg.message_id],
+            context.bot,
+            DELETE_DELAY
+        ))
+        logging.error(f"Failed to ban user {target_user_id} - {e}")
+
 if __name__ == '__main__':
     # 设置更详细的日志级别
     logging.getLogger().setLevel(logging.DEBUG)
@@ -278,6 +395,7 @@ if __name__ == '__main__':
     # 2. 管理命令处理器
     application.add_handler(CommandHandler('start', start), group=2)
     application.add_handler(CommandHandler('d', delete_message), group=2)
+    application.add_handler(CommandHandler('ban', ban_user), group=2)
     
     # 3. 中文语言设置处理器 - 提高优先级
     application.add_handler(MessageHandler(
