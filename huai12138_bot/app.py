@@ -34,6 +34,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /start 命令"""
     user_id = str(update.effective_user.id)
     
+    # 如果用户是管理员，直接跳过验证
+    if user_id == ADMIN_ID:
+        await update.message.reply_text('欢迎管理员！您无需验证即可使用。')
+        return
+    
     # 如果用户被封禁，则不需要验证
     if block_manager.is_blocked(user_id):
         await update.message.reply_text('您已被封禁，无法使用此机器人。')
@@ -51,6 +56,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def check_verification(user_id: str, context: ContextTypes.DEFAULT_TYPE):
     """检查用户是否在30秒内完成验证"""
     await asyncio.sleep(30)  # 等待30秒
+    
+    # 如果是管理员，不进行封禁
+    if user_id == ADMIN_ID:
+        if user_id in pending_verification:
+            del pending_verification[user_id]
+        return
     
     if user_id in pending_verification:
         # 用户未能完成验证
