@@ -36,7 +36,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 如果用户是管理员，直接跳过验证
     if user_id == ADMIN_ID:
-        await update.message.reply_text('欢迎管理员！您无需验证即可使用。')
+        await update.message.reply_text('Hi Master! 欢迎使用！')
         return
     
     # 如果用户被封禁，则不需要验证
