@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import datetime
 import platform
 import socket
+import pytz  # 添加 pytz 库
 
 load_dotenv()
 
@@ -16,6 +17,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 online_timestamp = None
 hostname = socket.gethostname()
 system_info = platform.system() + " " + platform.release()
+china_timezone = pytz.timezone('Asia/Shanghai')  # 定义东八区时区
 
 # Telegram Bot Configuration
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
@@ -25,7 +27,7 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "YOUR_CHAT_ID")
 def online():
     """Record system coming online and send notification"""
     global online_timestamp
-    online_timestamp = datetime.datetime.now()
+    online_timestamp = datetime.datetime.now(china_timezone)  # 使用东八区时区
     
     # Enhanced message (without hostname and system info)
     message = f"🟢 *MINECRAFT ONLINE*\n\n" \
@@ -52,7 +54,7 @@ def online():
 def offline():
     """Record system going offline and calculate uptime"""
     global online_timestamp
-    offline_timestamp = datetime.datetime.now()
+    offline_timestamp = datetime.datetime.now(china_timezone)  # 使用东八区时区
     
     # Calculate uptime
     if online_timestamp:
