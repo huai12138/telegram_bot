@@ -110,7 +110,7 @@ async def handle_new_members(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         welcome_message = (
             f"欢迎新成员 {new_member.full_name} 加入！\n"
-            f"请在30秒内发送 'hi' 完成验证，否则将被永久封禁。\n"
+            f"请在30秒内发送 'hi' 完成验证，否则将被永久禁言。\n"
             f"用户ID: {new_member.id}\n"
             f"用户名: @{new_member.username if new_member.username else '无'}"
         )
@@ -168,30 +168,38 @@ async def check_verification(user_id: int, chat_id: int, bot):
     """检查用户是否在30秒内完成验证"""
     await asyncio.sleep(VERIFY_TIMEOUT)
     if user_id in pending_users:
-        # 删除所有相关消息
+        # 仅删除我们已记录的消息
         for msg_id in pending_users[user_id]['messages_to_delete']:
             try:
                 await bot.delete_message(chat_id=chat_id, message_id=msg_id)
-            except TelegramError as e:
-                logging.error(f"Failed to delete message {msg_id} - {e}")
+            except TelegramError:
+                pass
 
         if not pending_users[user_id]['verified']:
             try:
-                # 直接封禁用户，不再解封
-                await bot.ban_chat_member(
+                # 改为永久禁言而非封禁
+                await bot.restrict_chat_member(
                     chat_id=chat_id, 
                     user_id=user_id,
-                    revoke_messages=True  # 撤回该用户的所有消息
+                    permissions=ChatPermissions(
+                        can_send_messages=False,
+                        can_send_other_messages=False,
+                        can_add_web_page_previews=False,
+                        can_send_polls=False,
+                        can_change_info=False,
+                        can_invite_users=False,
+                        can_pin_messages=False
+                    )
                 )
                 ban_msg = await bot.send_message(
                     chat_id=chat_id,
-                    text=f"用户 ID:{user_id} 未在30秒内完成验证，已被永久封禁。"
+                    text=f"用户 ID:{user_id} 未在30秒内完成验证，已被永久禁言。"
                 )
-                # 等待指定时间后删除封禁提示消息
+                # 等待指定时间后删除禁言提示消息
                 await asyncio.sleep(BAN_MSG_DELAY)
                 await bot.delete_message(chat_id=chat_id, message_id=ban_msg.message_id)
             except TelegramError as e:
-                logging.error(f"Failed to ban user ID:{user_id} - {e}")
+                logging.error(f"Failed to restrict user ID:{user_id} - {e}")
         
         del pending_users[user_id]
 
@@ -399,7 +407,7 @@ if __name__ == '__main__':
     
     # 3. 中文语言设置处理器 - 提高优先级
     application.add_handler(MessageHandler(
-        filters.Regex('^中文$') & (~filters.COMMAND), 
+        filters.Regex('^zh$') & (~filters.COMMAND), 
         set_chinese
     ), group=2)  # 与管理命令同级
     
